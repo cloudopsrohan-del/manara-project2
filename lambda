@@ -1,0 +1,34 @@
+import boto3, os, io
+from PIL import Image, ImageDraw, ImageFont
+
+s3 = boto3.client('s3')
+OUTPUT_BUCKET = os.environ['OUTPUT_BUCKET']
+
+def handler(event, context):
+    for record in event['Records']:
+        bucket = record['s3']['bucket']['name']
+        key = record['s3']['object']['key']
+
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        img = Image.open(io.BytesIO(obj['Body'].read()))
+
+        # Resize
+        img_resized = img.resize((256, 256))
+
+        # Optional watermark
+        draw = ImageDraw.Draw(img_resized)
+        font = ImageFont.load_default()
+        draw.text((10, 10), "© Demo", fill="white", font=font)
+
+        out_buffer = io.BytesIO()
+        img_resized.save(out_buffer, format='JPEG')
+        out_buffer.seek(0)
+
+        output_key = f"processed/{os.path.basename(key)}"
+        s3.put_object(
+            Bucket=OUTPUT_BUCKET,
+            Key=output_key,
+            Body=out_buffer,
+            ContentType='image/jpeg'
+        )
+    return {"status": "success"}
